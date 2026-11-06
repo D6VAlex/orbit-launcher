@@ -1,0 +1,104 @@
+name: Build Windows release
+
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Inno Setup (for the Setup EXE)
+        run: choco install innosetup -y --no-progress
+        continue-on-error: true
+
+      - name: Build the app
+        run: python build.py
+
+      - name: Write checksums and the update manifest
+        shell: pwsh
+        run: |
+          $zip = (Get-ChildItem "dist/Orbit-v*-win64.zip" |
+                  Select-Object -First 1)
+          $zipHash = (Get-FileHash $zip.FullName -Algorithm SHA256).Hash.ToLower()
+          $setup = Get-ChildItem "dist/Orbit-Setup-*.exe" |
+                   Select-Object -First 1
+          $sha = $zipHash
+          $lines = @("Orbit ZIP   sha256: $zipHash")
+          if ($setup) {
+            $sha = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLower()
+            $lines += "Orbit Setup sha256: $sha"
+          }
+          $lines | Set-Content dist/sha256.txt
+          $ver = "${{ github.ref_name }}".TrimStart("v")
+          $asset = if ($setup) { "Orbit-Setup-$ver.exe" }
+                   else { "Orbit-v$ver-win64.zip" }
+          $json = @{
+            version = $ver
+            url = ("https://github.com/${{ github.repository }}" +
+                   "/releases/latest/download/$asset")
+            notes = "Orbit $ver - see the release notes on the Releases page."
+            sha256 = $sha
+          } | ConvertTo-Json
+          $json | Set-Content dist/latest.json
+          "### Ready-to-paste latest.json (commit this on main)" |
+            Out-File $env:GITHUB_STEP_SUMMARY -Append
+          '```json' | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          $json | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          '```' | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          $lines | Out-File $env:GITHUB_STEP_SUMMARY -Append
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Orbit-windows-build
+          path: |
+            dist/Orbit-v*-win64.zip
+            dist/Orbit-Setup-*.exe
+            dist/latest.json
+            dist/sha256.txt
+          if-no-files-found: error
+
+      - name: Attach files to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/Orbit-v*-win64.zip
+            dist/Orbit-Setup-*.exe
+            dist/sha256.txt
+          body: |
+            Built automatically from the ${{ github.ref_name }} tag.
+            SHA-256 checksums are in `sha256.txt` and in the Actions run summary.
+
+      - name: Publish latest.json to main
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Copy-Item dist/latest.json latest.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add latest.json
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Publish latest.json for ${{ github.ref_name }}"
+            git push origin "HEAD:refs/heads/main"
+          }

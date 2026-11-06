@@ -1,0 +1,6 @@
+{
+  "version": "1.1.1",
+  "url": "https://github.com/D6VAlex/orbit-launcher/releases/latest/download/Orbit-Setup-v1.1.1.exe",
+  "notes": "Orbit 1.1.1: fixed missing games in the library, games no longer disappear on their own, and closing the window now always exits the app. The update manifest on main is refreshed automatically after each release build.",
+  "sha256": ""
+}
