@@ -15,11 +15,11 @@ from PySide6.QtCore import QObject, QThread
 log = logging.getLogger(__name__)
 
 IS_WINDOWS = sys.platform == "win32"
-DISCORD_CLIENT_ID: int = 1560291914253598852
+DISCORD_CLIENT_ID: int = 1568136649429221516
 
 IDLE_ACTIVITY = {"details": "Browsing the library", "state": "Using Orbit"}
 USE_ASSETS = True
-ASSET_KEY = "polar"
+ASSET_KEY = "Orbit"
 
 OP_HANDSHAKE, OP_FRAME, OP_CLOSE, OP_PING, OP_PONG = 0, 1, 2, 3, 4
 
